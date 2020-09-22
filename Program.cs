@@ -11,20 +11,24 @@ namespace TransferLearningTF_POC
     {
         private static readonly string _assetsPath = Path.Combine(Environment.CurrentDirectory, "assets");
         private static readonly string _imagesFolder = Path.Combine(_assetsPath, "images");
+        private static readonly string _inceptionTensorFlowModel = Path.Combine(_assetsPath, "inception", "tensorflow_inception_graph.pb");
+        private static readonly string _predictSingleImage = Path.Combine(_imagesFolder, "toaster3.jpg");
         private static readonly string _testTagsTsv = Path.Combine(_imagesFolder, "test-tags.tsv");
         private static readonly string _trainTagsTsv = Path.Combine(_imagesFolder, "tags.tsv");
-        static readonly string _predictSingleImage = Path.Combine(_imagesFolder, "toaster3.jpg");
-        static readonly string _inceptionTensorFlowModel = Path.Combine(_assetsPath, "inception", "tensorflow_inception_graph.pb");
 
-        static void Main(string[] args)
+        public static void ClassifySingleImage(MLContext mlContext, ITransformer model)
         {
-            MLContext mlContext = new MLContext();
-            
-            ITransformer model = GenerateModel(mlContext);
+            var imageData = new ImageData()
+            {
+                ImagePath = _predictSingleImage
+            };
 
-            ClassifySingleImage(mlContext, model);
+            // Make prediction function (input = ImageData, output = ImagePrediction)
+            var predictor = mlContext.Model.CreatePredictionEngine<ImageData, ImagePrediction>(model);
+            var prediction = predictor.Predict(imageData);
 
-            Console.ReadKey();
+            Console.WriteLine("=============== Making single image classification ===============");
+            Console.WriteLine($"Image: {Path.GetFileName(imageData.ImagePath)} predicted as: {prediction.PredictedLabelValue} with score: {prediction.Score.Max()} ");
         }
 
         // Build and train model
@@ -57,48 +61,11 @@ namespace TransferLearningTF_POC
                 mlContext.MulticlassClassification.Evaluate(predictions,
                   labelColumnName: "LabelKey",
                   predictedLabelColumnName: "PredictedLabel");
-            // </SnippetEvaluate>
 
-            //<SnippetDisplayMetrics>
             Console.WriteLine($"LogLoss is: {metrics.LogLoss}");
             Console.WriteLine($"PerClassLogLoss is: {String.Join(" , ", metrics.PerClassLogLoss.Select(c => c.ToString()))}");
-            //</SnippetDisplayMetrics>
 
-            // <SnippetReturnModel>
             return model;
-            // </SnippetReturnModel>
-        }
-
-        public static void ClassifySingleImage(MLContext mlContext, ITransformer model)
-        {
-            // load the fully qualified image file name into ImageData
-            // <SnippetLoadImageData>
-            var imageData = new ImageData()
-            {
-                ImagePath = _predictSingleImage
-            };
-            // </SnippetLoadImageData>
-
-            // <SnippetPredictSingle>
-            // Make prediction function (input = ImageData, output = ImagePrediction)
-            var predictor = mlContext.Model.CreatePredictionEngine<ImageData, ImagePrediction>(model);
-            var prediction = predictor.Predict(imageData);
-            // </SnippetPredictSingle>
-
-            Console.WriteLine("=============== Making single image classification ===============");
-            // <SnippetDisplayPrediction>
-            Console.WriteLine($"Image: {Path.GetFileName(imageData.ImagePath)} predicted as: {prediction.PredictedLabelValue} with score: {prediction.Score.Max()} ");
-            // </SnippetDisplayPrediction>
-        }
-
-        private static void DisplayResults(IEnumerable<ImagePrediction> imagePredictionData)
-        {
-            // <SnippetDisplayPredictions>
-            foreach (ImagePrediction prediction in imagePredictionData)
-            {
-                Console.WriteLine($"Image: {Path.GetFileName(prediction.ImagePath)} predicted as: {prediction.PredictedLabelValue} with score: {prediction.Score.Max()} ");
-            }
-            // </SnippetDisplayPredictions>
         }
 
         public static IEnumerable<ImageData> ReadFromTsv(string file, string folder)
@@ -106,28 +73,42 @@ namespace TransferLearningTF_POC
             //Need to parse through the tags.tsv file to combine the file path to the
             // image name for the ImagePath property so that the image file can be found.
 
-            // <SnippetReadFromTsv>
             return File.ReadAllLines(file)
              .Select(line => line.Split('\t'))
              .Select(line => new ImageData()
              {
                  ImagePath = Path.Combine(folder, line[0])
              });
-            // </SnippetReadFromTsv>
         }
 
-        // <SnippetInceptionSettings>
+        private static void DisplayResults(IEnumerable<ImagePrediction> imagePredictionData)
+        {
+            foreach (ImagePrediction prediction in imagePredictionData)
+            {
+                Console.WriteLine($"Image: {Path.GetFileName(prediction.ImagePath)} predicted as: {prediction.PredictedLabelValue} with score: {prediction.Score.Max()} ");
+            }
+        }
+
+        private static void Main(string[] args)
+        {
+            MLContext mlContext = new MLContext();
+
+            ITransformer model = GenerateModel(mlContext);
+
+            ClassifySingleImage(mlContext, model);
+
+            Console.ReadKey();
+        }
+
         private struct InceptionSettings
         {
+            public const bool ChannelsLast = true;
             public const int ImageHeight = 224;
             public const int ImageWidth = 224;
             public const float Mean = 117;
             public const float Scale = 1;
-            public const bool ChannelsLast = true;
         }
-        // </SnippetInceptionSettings>
 
-        // <SnippetDeclareImageData>
         public class ImageData
         {
             [LoadColumn(0)]
@@ -136,15 +117,11 @@ namespace TransferLearningTF_POC
             [LoadColumn(1)]
             public string Label;
         }
-        // </SnippetDeclareImageData>
 
-        // <SnippetDeclareImagePrediction>
         public class ImagePrediction : ImageData
         {
-            public float[] Score;
-
             public string PredictedLabelValue;
+            public float[] Score;
         }
-        // </SnippetDeclareImagePrediction>
     }
 }
