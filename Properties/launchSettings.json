@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "TransferLearningTF-POC": {
+      "commandName": "Project",
+      "workingDirectory": "$(SolutionDir)"
+    }
+  }
+}
